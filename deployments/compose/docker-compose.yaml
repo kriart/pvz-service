@@ -1,0 +1,88 @@
+services:
+    db:
+        image: postgres:15-alpine
+        environment:
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: postgres
+            POSTGRES_DB: pvz
+        ports:
+            - "15433:5432"
+        healthcheck:
+            test: ["CMD", "pg_isready", "-U", "postgres"]
+            interval: 5s
+            retries: 5
+
+    migrator:
+        env_file:
+            - ./.env
+        environment:
+            DB_HOST: db
+            DB_PORT: 5432
+            DB_USER: postgres
+            DB_PASSWORD: postgres
+            DB_NAME: pvz
+        build:
+            context: ../..
+            dockerfile: deployments/docker/Dockerfile
+        command: ["/app/pvz-migrator"]
+        depends_on:
+            db:
+                condition: service_healthy
+
+    api:
+        env_file:
+            - ./.env
+        environment:
+            DB_HOST: db
+            DB_PORT: 5432
+            DB_USER: postgres
+            DB_PASSWORD: postgres
+            DB_NAME: pvz
+        build:
+            context: ../..
+            dockerfile: deployments/docker/Dockerfile
+        command: ["/app/pvz-api"]
+        depends_on:
+            db:
+                condition: service_healthy
+            migrator:
+                condition: service_completed_successfully
+        ports:
+            - "8080:8080"
+            - "9000:9090"
+
+    grpc:
+        env_file:
+            - ./.env
+        environment:
+            DB_HOST: db
+            DB_PORT: 5432
+            DB_USER: postgres
+            DB_PASSWORD: postgres
+            DB_NAME: pvz
+        build:
+            context: ../..
+            dockerfile: deployments/docker/Dockerfile
+        command: ["/app/pvz-grpc"]
+        depends_on:
+            db:
+                condition: service_healthy
+        ports:
+            - "3000:3000"
+
+    prometheus:
+        image: prom/prometheus:v2.47.0
+        volumes:
+            - ./prometheus.yaml:/etc/prometheus/prometheus.yml
+        ports:
+            - "9091:9090"
+    swagger-ui:
+        image: swaggerapi/swagger-ui:v5.17.14
+        environment:
+            SWAGGER_JSON: /spec/swagger.yaml
+        volumes:
+            - ../../api/openapi/swagger.yaml:/spec/swagger.yaml:ro
+        ports:
+            - "8081:8080"
+        depends_on:
+            - api

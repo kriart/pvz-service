@@ -1,0 +1,4 @@
+DROP TABLE products;
+DROP TABLE receptions;
+DROP TABLE pvzs;
+DROP TABLE users;
